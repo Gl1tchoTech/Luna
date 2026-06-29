@@ -18,6 +18,10 @@ struct ContentView: View {
                     HomeView()
                 }
                 
+                Tab("Continue", systemImage: "play.rectangle.fill") {
+                    FinishWatchingView()
+                }
+                
                 Tab("Library", systemImage: "books.vertical.fill") {
                     LibraryView()
                 }
@@ -49,6 +53,12 @@ struct ContentView: View {
                 .tabItem {
                     Image(systemName: "house.fill")
                     Text("Home")
+                }
+            
+            FinishWatchingView()
+                .tabItem {
+                    Image(systemName: "play.rectangle.fill")
+                    Text("Continue")
                 }
             
             LibraryView()

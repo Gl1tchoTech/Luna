@@ -8,9 +8,14 @@
 import AVKit
 import Sybau
 
+extension Notification.Name {
+    static let mediaPlaybackDidFinish = Notification.Name("mediaPlaybackDidFinish")
+}
+
 class NormalPlayer: AVPlayerViewController, AVPlayerViewControllerDelegate {
     private var originalRate: Float = 1.0
     private var timeObserverToken: Any?
+    private var didPlayToEndObserver: Any?
     var mediaInfo: MediaInfo?
     
 #if os(iOS)
@@ -28,6 +33,7 @@ class NormalPlayer: AVPlayerViewController, AVPlayerViewControllerDelegate {
             setupProgressTracking(for: info)
         }
         setupAudioSession()
+        setupPlaybackCompletionObserver()
     }
     
     override func viewDidDisappear(_ animated: Bool) {
@@ -38,12 +44,14 @@ class NormalPlayer: AVPlayerViewController, AVPlayerViewControllerDelegate {
             player?.removeTimeObserver(token)
             timeObserverToken = nil
         }
+        removePlaybackCompletionObserver()
     }
     
     deinit {
         if let token = timeObserverToken {
             player?.removeTimeObserver(token)
         }
+        removePlaybackCompletionObserver()
     }
     
 #if os(iOS)
@@ -144,6 +152,56 @@ class NormalPlayer: AVPlayerViewController, AVPlayerViewControllerDelegate {
         
         timeObserverToken = ProgressManager.shared.addPeriodicTimeObserver(to: player, for: mediaInfo)
         seekToLastPosition(for: mediaInfo)
+    }
+    
+    // MARK: - Playback Completion
+    
+    private func setupPlaybackCompletionObserver() {
+        guard player != nil else { return }
+        
+        didPlayToEndObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self,
+                  let player = self.player,
+                  notification.object as? AVPlayerItem == player.currentItem else { return }
+            self.handlePlaybackFinished()
+        }
+    }
+    
+    private func removePlaybackCompletionObserver() {
+        if let observer = didPlayToEndObserver {
+            NotificationCenter.default.removeObserver(observer)
+            didPlayToEndObserver = nil
+        }
+    }
+    
+    private func handlePlaybackFinished() {
+        guard let info = mediaInfo else { return }
+        
+        switch info {
+        case .movie(let id, let title):
+            UserDefaults.standard.set(true, forKey: "movie_watched_\(id)")
+            Logger.shared.log("Movie finished: \(title)", type: "Progress")
+            
+        case .episode(let showId, _, let seasonNumber, let episodeNumber):
+            ProgressManager.shared.markEpisodeAsWatched(
+                showId: showId,
+                seasonNumber: seasonNumber,
+                episodeNumber: episodeNumber
+            )
+            Logger.shared.log("Episode finished: S\(seasonNumber)E\(episodeNumber)", type: "Progress")
+        }
+        
+        NotificationCenter.default.post(
+            name: .mediaPlaybackDidFinish,
+            object: nil,
+            userInfo: ["mediaInfo": info]
+        )
+        
+        dismiss(animated: true)
     }
     
     private func seekToLastPosition(for mediaInfo: MediaInfo) {

@@ -18,21 +18,46 @@ struct SoraApp: App {
     @AppStorage("showKanzen") private var showKanzen: Bool = false
     let kanzen = KanzenEngine();
 #endif
+    
+    @AppStorage("hasImportedAnimetsuModule") private var hasImportedAnimetsuModule: Bool = false
+    
+    private let animetsuJSONURL = "https://git.luna-app.eu/50n50/sources/raw/branch/main/gojowtf/gojowtf.json"
 
     var body: some Scene {
         WindowGroup {
+            Group {
 #if os(tvOS)
-            ContentView()
-#else
-            if showKanzen {
-                    KanzenMenu().environmentObject(settings).environmentObject(moduleManager).environmentObject(favouriteManager)
-                    .environment(\.managedObjectContext, favouriteManager.container.viewContext)
-                    .accentColor(settings.accentColor)
-            }
-            else{
                 ContentView()
-            }
+#else
+                if showKanzen {
+                    KanzenMenu().environmentObject(settings).environmentObject(moduleManager).environmentObject(favouriteManager)
+                        .environment(\.managedObjectContext, favouriteManager.container.viewContext)
+                        .accentColor(settings.accentColor)
+                } else {
+                    ContentView()
+                }
 #endif
+            }
+            .task {
+                await importAnimetsuModuleIfNeeded()
+            }
         }
     }
-}
+    
+    private func importAnimetsuModuleIfNeeded() async {
+        guard !hasImportedAnimetsuModule else { return }
+        
+        await ServiceManager.shared.downloadService(from: animetsuJSONURL)
+        // Small delay to ensure the service is saved before activating
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        
+        // Activate the service if it was downloaded
+        if let service = ServiceManager.shared.services.first(where: { $0.url == animetsuJSONURL }),
+           !service.isActive {
+            ServiceManager.shared.setServiceState(service, isActive: true)
+        }
+        
+        await MainActor.run {
+            hasImportedAnimetsuModule = true
+        }
+    }

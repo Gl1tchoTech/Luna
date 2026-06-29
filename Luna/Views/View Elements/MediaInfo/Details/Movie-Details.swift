@@ -9,6 +9,11 @@ import SwiftUI
 
 struct MovieDetailsSection: View {
     let movie: TMDBMovieDetail?
+    let movieId: Int
+    
+    private var isMovieWatched: Bool {
+        UserDefaults.standard.bool(forKey: "movie_watched_\(movieId)")
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -21,6 +26,19 @@ struct MovieDetailsSection: View {
                     .foregroundColor(.white)
                 
                 VStack(spacing: 12) {
+                    if isMovieWatched {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("Already Watched")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.green)
+                            Spacer()
+                        }
+                        .padding(.bottom, 4)
+                    }
+                    
                     if let runtime = movie.runtime, runtime > 0 {
                         DetailRow(title: "Runtime", value: movie.runtimeFormatted)
                     }

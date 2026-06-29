@@ -65,6 +65,9 @@ if [ -e "$TARGET_APP/embedded.mobileprovision" ]; then
     rm -rf "$TARGET_APP/embedded.mobileprovision"
 fi
 
+# Create .app.zip for Appetize testing
+zip -qr "$APPLICATION_NAME$OUTPUT_SUFFIX.app.zip" "$APPLICATION_NAME$OUTPUT_SUFFIX.app"
+
 mkdir Payload
 cp -r "$TARGET_APP" "Payload/$APPLICATION_NAME.app"
 

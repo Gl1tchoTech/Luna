@@ -30,6 +30,12 @@ jobs:
         with:
           name: Luna-iOS
           path: build/Luna.ipa
+          
+      - name: Upload iOS Appetize .app.zip
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: Luna-iOS-Appetize
+          path: build/Luna.app.zip
 
   build-tvos:
     name: Build tvOS IPA
@@ -54,3 +60,9 @@ jobs:
         with:
           name: Luna-tvOS
           path: build/Luna-tvOS.ipa
+          
+      - name: Upload tvOS Appetize .app.zip
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: Luna-tvOS-Appetize
+          path: build/Luna-tvOS.app.zip

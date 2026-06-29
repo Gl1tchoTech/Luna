@@ -76,6 +76,18 @@ struct EpisodeCell: View {
                         
                         HStack {
                             HStack(spacing: 2) {
+                                if isWatched {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption2)
+                                        .foregroundColor(.green)
+                                    
+                                    if episode.voteAverage > 0 || (episode.runtime ?? 0) > 0 {
+                                        Text(" - ")
+                                            .font(.caption2)
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                
                                 if episode.voteAverage > 0 {
                                     Image(systemName: "star.fill")
                                         .font(.caption2)
@@ -180,6 +192,18 @@ struct EpisodeCell: View {
                         
                         HStack {
                             HStack(spacing: 2) {
+                                if isWatched {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption2)
+                                        .foregroundColor(.green)
+                                    
+                                    if episode.voteAverage > 0 || (episode.runtime ?? 0) > 0 {
+                                        Text(" - ")
+                                            .font(.caption2)
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                
                                 if episode.voteAverage > 0 {
                                     Image(systemName: "star.fill")
                                         .font(.caption2)

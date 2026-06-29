@@ -220,6 +220,9 @@ struct MediaDetailView: View {
                 selectedEpisodeForSearch = episode
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .mediaPlaybackDidFinish)) { notification in
+            handlePlaybackFinished(notification)
+        }
         .onChangeComp(of: isLoading) { _, newValue in
             if !newValue && directPlayOnLoad && !isDirectStreaming {
                 isDirectStreaming = true
@@ -401,7 +404,7 @@ struct MediaDetailView: View {
                     moduleDetailsSection
                     episodesSection
                 } else if searchResult.isMovie {
-                    MovieDetailsSection(movie: movieDetail)
+                    MovieDetailsSection(movie: movieDetail, movieId: searchResult.id)
                 } else {
                     episodesSection
                 }
@@ -606,6 +609,42 @@ struct MediaDetailView: View {
     private func updateBookmarkStatus() {
         guard !isModuleMode else { return }
         isBookmarked = libraryManager.isBookmarked(searchResult)
+    }
+    
+    private func handlePlaybackFinished(_ notification: Notification) {
+        guard let mediaInfo = notification.userInfo?["mediaInfo"] as? MediaInfo else { return }
+        
+        // Refresh watched status for movies
+        if case .movie = mediaInfo {
+            // Force SwiftUI to re-evaluate the view
+            isLoading = false
+            return
+        }
+        
+        // For TV shows, auto-play next episode
+        guard case .episode(let showId, _, let seasonNumber, let episodeNumber) = mediaInfo else { return }
+        guard let seasonDetail = seasonDetail else { return }
+        
+        // Find the current episode index
+        let episodes = seasonDetail.episodes
+        guard let currentIndex = episodes.firstIndex(where: {
+            $0.seasonNumber == seasonNumber && $0.episodeNumber == episodeNumber
+        }) else { return }
+        
+        // Check if there's a next episode
+        let nextIndex = currentIndex + 1
+        guard nextIndex < episodes.count else {
+            // No more episodes in this season
+            return
+        }
+        
+        let nextEpisode = episodes[nextIndex]
+        
+        // Delay to allow player dismiss animation to complete before presenting next
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            self.selectedEpisodeForSearch = nextEpisode
+            self.showingSearchResults = true
+        }
     }
     
     private func directPlayWithFirstService() {
