@@ -25,22 +25,27 @@ struct SoraApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Group {
 #if os(tvOS)
-                ContentView()
-#else
-                if showKanzen {
-                    KanzenMenu().environmentObject(settings).environmentObject(moduleManager).environmentObject(favouriteManager)
-                        .environment(\.managedObjectContext, favouriteManager.container.viewContext)
-                        .accentColor(settings.accentColor)
-                } else {
-                    ContentView()
+            ContentView()
+                .task {
+                    await importAnimetsuModuleIfNeeded()
                 }
+#else
+            if showKanzen {
+                KanzenMenu().environmentObject(settings).environmentObject(moduleManager).environmentObject(favouriteManager)
+                    .environment(\.managedObjectContext, favouriteManager.container.viewContext)
+                    .accentColor(settings.accentColor)
+                    .task {
+                        await importAnimetsuModuleIfNeeded()
+                    }
+            }
+            else{
+                ContentView()
+                    .task {
+                        await importAnimetsuModuleIfNeeded()
+                    }
+            }
 #endif
-            }
-            .task {
-                await importAnimetsuModuleIfNeeded()
-            }
         }
     }
     
