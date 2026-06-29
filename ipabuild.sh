@@ -17,6 +17,13 @@ case "$PLATFORM" in
         PLATFORM_DIR="Release-iphoneos"
         OUTPUT_SUFFIX=""
         ;;
+    ios-sim|ios-simulator)
+        PLATFORM="ios-sim"
+        SDK="iphonesimulator"
+        XCODE_DESTINATION="generic/platform=iOS Simulator"
+        PLATFORM_DIR="Release-iphonesimulator"
+        OUTPUT_SUFFIX=""
+        ;;
     tvos|tvOS)
         PLATFORM="tvos"
         SDK="appletvos"
@@ -26,9 +33,10 @@ case "$PLATFORM" in
         ;;
     *)
         echo "Error: Invalid platform '$PLATFORM'"
-        echo "Usage: $0 [ios|tvos]"
-        echo "  ios  - Build for iOS (default)"
-        echo "  tvos - Build for tvOS"
+        echo "Usage: $0 [ios|ios-sim|tvos]"
+        echo "  ios     - Build for iOS device (IPA + .app.zip)"
+        echo "  ios-sim - Build for iOS Simulator for Appetize (.app.zip only)"
+        echo "  tvos    - Build for tvOS device (IPA + .app.zip)"
         exit 1
         ;;
 esac
@@ -65,17 +73,22 @@ if [ -e "$TARGET_APP/embedded.mobileprovision" ]; then
     rm -rf "$TARGET_APP/embedded.mobileprovision"
 fi
 
-# Create .app.zip for Appetize testing
-zip -qr "$APPLICATION_NAME$OUTPUT_SUFFIX.app.zip" "$APPLICATION_NAME$OUTPUT_SUFFIX.app"
+# Create output artifacts
+if [ "$PLATFORM" = "ios-sim" ]; then
+    # Simulator build: only produce .app.zip for Appetize
+    zip -qr "$APPLICATION_NAME.app.zip" "$APPLICATION_NAME.app"
+    rm -rf "$TARGET_APP"
+else
+    # Device build: produce .ipa only (no .app.zip needed)
+    mkdir Payload
+    cp -r "$TARGET_APP" "Payload/$APPLICATION_NAME.app"
 
-mkdir Payload
-cp -r "$TARGET_APP" "Payload/$APPLICATION_NAME.app"
+    if [ -f "Payload/$APPLICATION_NAME.app/$APPLICATION_NAME" ]; then
+        strip "Payload/$APPLICATION_NAME.app/$APPLICATION_NAME" 2>/dev/null || true
+    fi
 
-if [ -f "Payload/$APPLICATION_NAME.app/$APPLICATION_NAME" ]; then
-    strip "Payload/$APPLICATION_NAME.app/$APPLICATION_NAME" 2>/dev/null || true
+    zip -qr "$APPLICATION_NAME$OUTPUT_SUFFIX.ipa" Payload
+
+    rm -rf "$TARGET_APP"
+    rm -rf Payload
 fi
-
-zip -qr "$APPLICATION_NAME$OUTPUT_SUFFIX.ipa" Payload
-
-rm -rf "$TARGET_APP"
-rm -rf Payload
