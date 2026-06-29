@@ -65,3 +65,4 @@ struct SoraApp: App {
             hasImportedAnimetsuModule = true
         }
     }
+}
