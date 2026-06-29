@@ -38,8 +38,7 @@ struct SoraApp: App {
                     .task {
                         await importAnimetsuModuleIfNeeded()
                     }
-            }
-            else{
+            } else {
                 ContentView()
                     .task {
                         await importAnimetsuModuleIfNeeded()
