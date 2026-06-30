@@ -658,7 +658,10 @@ struct MediaDetailView: View {
                             tmdbId: self.searchResult.id,
                             title: self.searchResult.displayTitle,
                             mediaType: .movie,
-                            posterPath: self.movieDetail?.posterPath
+                            posterPath: self.movieDetail?.posterPath,
+                            progress: 0.0,
+                            downloadedBytes: 0,
+                            totalBytes: 0
                         ))
                     }
                 }
@@ -706,7 +709,10 @@ struct MediaDetailView: View {
                             seasonNumber: episode.seasonNumber,
                             episodeNumber: episode.episodeNumber,
                             episodeName: episode.name,
-                            posterPath: self.tvShowDetail?.posterPath
+                            posterPath: self.tvShowDetail?.posterPath,
+                            progress: 0.0,
+                            downloadedBytes: 0,
+                            totalBytes: 0
                         ))
                     }
                 }
@@ -779,7 +785,10 @@ struct MediaDetailView: View {
                                 seasonNumber: episode.seasonNumber,
                                 episodeNumber: episode.episodeNumber,
                                 episodeName: episode.name,
-                                posterPath: self.tvShowDetail?.posterPath
+                                posterPath: self.tvShowDetail?.posterPath,
+                                progress: 0.0,
+                                downloadedBytes: 0,
+                                totalBytes: 0
                             ))
                         }
                         // Small delay between downloads
@@ -842,7 +851,7 @@ struct MediaDetailView: View {
         }
         
         // For TV shows, auto-play next episode
-        guard case .episode(let showId, _, let seasonNumber, let episodeNumber) = mediaInfo else { return }
+        guard case .episode(_, _, let seasonNumber, let episodeNumber) = mediaInfo else { return }
         guard let seasonDetail = seasonDetail else { return }
         
         // Find the current episode index
