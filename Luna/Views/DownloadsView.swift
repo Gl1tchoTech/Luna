@@ -151,18 +151,32 @@ struct DownloadsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                VStack(spacing: 2) {
-                    ProgressView(value: progress.progress)
-                        .progressViewStyle(LinearProgressViewStyle(tint: .accentColor))
+                VStack(spacing: 4) {
+                    HStack {
+                        ProgressView(value: progress.progress)
+                            .progressViewStyle(LinearProgressViewStyle(tint: .accentColor))
+                        
+                        Text(percentageText(progress.progress))
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.accentColor)
+                            .frame(width: 40, alignment: .trailing)
+                    }
                     
                     HStack {
                         Text(formatBytes(progress.downloadedBytes))
                             .font(.caption2)
                             .foregroundColor(.secondary)
                         Spacer()
-                        Text(formatBytes(progress.totalBytes))
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                        if progress.totalBytes > 0 {
+                            Text(formatBytes(progress.totalBytes))
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Calculating…")
+                                .font(.caption2)
+                                .foregroundColor(.secondary.opacity(0.6))
+                        }
                     }
                 }
             }
@@ -310,6 +324,11 @@ struct DownloadsView: View {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: bytes)
+    }
+    
+    private func percentageText(_ progress: Double) -> String {
+        let pct = Int(progress * 100)
+        return "\(pct)%"
     }
     
     private func playDownloadedItem(_ item: DownloadedItem) {

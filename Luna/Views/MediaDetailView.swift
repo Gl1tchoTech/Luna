@@ -62,8 +62,11 @@ struct MediaDetailView: View {
     @ObservedObject private var libraryManager = LibraryManager.shared
     @StateObject private var downloadManager = DownloadManager.shared
     
-    @State private var isDownloading = false
     @State private var downloadMessage: String?
+    
+    private var activeDownloadCount: Int {
+        downloadManager.activeProgress.count
+    }
     
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -558,10 +561,14 @@ struct MediaDetailView: View {
                 Button(action: {
                     downloadMedia()
                 }) {
-                    if isDownloading {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .frame(width: 20, height: 20)
+                    if activeDownloadCount > 0 {
+                        HStack(spacing: 1) {
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.caption)
+                            Text("\(activeDownloadCount)")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                        }
                     } else {
                         Image(systemName: "arrow.down.to.line")
                             .font(.title2)
@@ -569,9 +576,8 @@ struct MediaDetailView: View {
                 }
                 .frame(width: 42, height: 42)
                 .applyLiquidGlassBackground(cornerRadius: 12)
-                .foregroundColor(.white)
+                .foregroundColor(activeDownloadCount > 0 ? .green : .white)
                 .cornerRadius(8)
-                .disabled(isDownloading)
             }
         }
         .padding(.horizontal)
@@ -640,17 +646,12 @@ struct MediaDetailView: View {
             return
         }
         
-        isDownloading = true
-        
         let jsController = JSController()
         jsController.loadScript(service.jsScript)
         
         if searchResult.isMovie {
             jsController.fetchJsSearchResults(keyword: searchResult.displayTitle, module: service) { [self] items in
-                guard let firstItem = items.first else {
-                    DispatchQueue.main.async { self.isDownloading = false }
-                    return
-                }
+                guard let firstItem = items.first else { return }
                 jsController.fetchStreamUrlJS(episodeUrl: firstItem.href, softsub: service.metadata.softsub ?? false, module: service) { result in
                     DispatchQueue.main.async {
                         self.startDownloadFromStreamResult(result, service: service, metadata: DownloadProgress(
@@ -668,10 +669,7 @@ struct MediaDetailView: View {
             }
         } else {
             // TV show - download first episode
-            guard let episode = selectedEpisodeForSearch ?? seasonDetail?.episodes.first else {
-                DispatchQueue.main.async { self.isDownloading = false }
-                return
-            }
+            guard let episode = selectedEpisodeForSearch ?? seasonDetail?.episodes.first else { return }
             downloadEpisode(episode)
         }
     }
@@ -679,16 +677,11 @@ struct MediaDetailView: View {
     private func downloadEpisode(_ episode: TMDBEpisode) {
         guard let service = serviceManager.activeServices.first else { return }
         
-        isDownloading = true
-        
         let jsController = JSController()
         jsController.loadScript(service.jsScript)
         
         jsController.fetchJsSearchResults(keyword: searchResult.displayTitle, module: service) { [self] items in
-            guard let firstItem = items.first else {
-                DispatchQueue.main.async { self.isDownloading = false }
-                return
-            }
+            guard let firstItem = items.first else { return }
             
             jsController.fetchDetailsJS(url: firstItem.href) { _, episodes in
                 let targetHref: String
@@ -725,7 +718,6 @@ struct MediaDetailView: View {
             do {
                 let detail = try await tmdbService.getSeasonDetails(tvShowId: searchResult.id, seasonNumber: season.seasonNumber)
                 await MainActor.run {
-                    isDownloading = true
                     downloadEpisodesSequentially(detail.episodes)
                 }
             } catch {
@@ -738,7 +730,6 @@ struct MediaDetailView: View {
     
     private func downloadEpisodesSequentially(_ episodes: [TMDBEpisode]) {
         guard let service = serviceManager.activeServices.first, !episodes.isEmpty else {
-            isDownloading = false
             return
         }
         
@@ -748,10 +739,7 @@ struct MediaDetailView: View {
         var remaining = episodes
         
         func downloadNext() {
-            guard let episode = remaining.first else {
-                DispatchQueue.main.async { self.isDownloading = false }
-                return
-            }
+            guard let episode = remaining.first else { return }
             remaining.removeFirst()
             
             // Skip if already downloaded
@@ -818,13 +806,9 @@ struct MediaDetailView: View {
             streamURL = url
         }
         
-        guard let streamURL = streamURL else {
-            isDownloading = false
-            return
-        }
+        guard let streamURL = streamURL else { return }
         
         let _ = downloadManager.startDownload(streamURL: streamURL, metadata: metadata)
-        isDownloading = false
     }
     
     private func toggleBookmark() {
