@@ -17,6 +17,7 @@ struct EpisodeCell: View {
     let onTap: () -> Void
     let onMarkWatched: () -> Void
     let onResetProgress: () -> Void
+    var onDownload: (() -> Void)? = nil
     
     @State private var isWatched: Bool = false
     @AppStorage("horizontalEpisodeList") private var horizontalEpisodeList: Bool = false
@@ -313,6 +314,14 @@ struct EpisodeCell: View {
                     isWatched = false
                 }) {
                     Label("Reset Progress", systemImage: "arrow.counterclockwise")
+                }
+            }
+            
+            Divider()
+            
+            if let onDownload = onDownload {
+                Button(action: onDownload) {
+                    Label("Download", systemImage: "arrow.down.to.line")
                 }
             }
         }

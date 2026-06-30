@@ -26,6 +26,10 @@ struct ContentView: View {
                     LibraryView()
                 }
                 
+                Tab("Downloads", systemImage: "arrow.down.to.line") {
+                    DownloadsView()
+                }
+                
                 Tab("Search", systemImage: "magnifyingglass", role: .search) {
                     SearchView()
                 }
@@ -65,6 +69,12 @@ struct ContentView: View {
                 .tabItem {
                     Image(systemName: "books.vertical.fill")
                     Text("Library")
+                }
+            
+            DownloadsView()
+                .tabItem {
+                    Image(systemName: "arrow.down.to.line")
+                    Text("Downloads")
                 }
             
             SearchView()

@@ -15,6 +15,8 @@ struct TVShowSeasonsSection: View {
     @Binding var seasonDetail: TMDBSeasonDetail?
     @Binding var selectedEpisodeForSearch: TMDBEpisode?
     let tmdbService: TMDBService
+    var onDownloadEpisode: ((TMDBEpisode) -> Void)? = nil
+    var onDownloadSeason: ((TMDBSeason) -> Void)? = nil
     
     @State private var isLoadingSeason = false
     @State private var showingSearchResults = false
@@ -179,6 +181,17 @@ struct TVShowSeasonsSection: View {
             
             Spacer()
             
+            if let season = selectedSeason, let onDownloadSeason = onDownloadSeason {
+                Button(action: {
+                    onDownloadSeason(season)
+                }) {
+                    Label("Download Season", systemImage: "arrow.down.to.line")
+                        .font(.caption)
+                        .labelStyle(.iconOnly)
+                }
+                .foregroundColor(.white)
+            }
+            
             if let tvShow = tvShow, isGroupedBySeasons && useSeasonMenu {
                 seasonMenu(for: tvShow)
             }
@@ -327,7 +340,8 @@ struct TVShowSeasonsSection: View {
                 isSelected: isSelected,
                 onTap: { episodeTapAction(episode: episode) },
                 onMarkWatched: { markAsWatched(episode: episode) },
-                onResetProgress: { resetProgress(episode: episode) }
+                onResetProgress: { resetProgress(episode: episode) },
+                onDownload: { [self] in onDownloadEpisode?(episode) }
             )
         } else {
             EmptyView()

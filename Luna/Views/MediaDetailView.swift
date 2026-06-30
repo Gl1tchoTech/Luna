@@ -60,6 +60,10 @@ struct MediaDetailView: View {
     
     @StateObject private var serviceManager = ServiceManager.shared
     @ObservedObject private var libraryManager = LibraryManager.shared
+    @StateObject private var downloadManager = DownloadManager.shared
+    
+    @State private var isDownloading = false
+    @State private var downloadMessage: String?
     
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -253,6 +257,11 @@ struct MediaDetailView: View {
             }
         } message: {
             Text(moduleStreamError ?? "Failed to start playback")
+        }
+        .alert("Download", isPresented: .init(get: { downloadMessage != nil }, set: { if !$0 { downloadMessage = nil } })) {
+            Button("OK") { downloadMessage = nil }
+        } message: {
+            Text(downloadMessage ?? "")
         }
         .adaptiveConfirmationDialog("Select Server", isPresented: $showingStreamMenu, titleVisibility: .visible) {
             ForEach(streamOptions) { option in
@@ -545,6 +554,24 @@ struct MediaDetailView: View {
                         .foregroundColor(.white)
                         .cornerRadius(8)
                 }
+                
+                Button(action: {
+                    downloadMedia()
+                }) {
+                    if isDownloading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .frame(width: 20, height: 20)
+                    } else {
+                        Image(systemName: "arrow.down.to.line")
+                            .font(.title2)
+                    }
+                }
+                .frame(width: 42, height: 42)
+                .applyLiquidGlassBackground(cornerRadius: 12)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+                .disabled(isDownloading)
             }
         }
         .padding(.horizontal)
@@ -575,7 +602,13 @@ struct MediaDetailView: View {
                 selectedSeason: $selectedSeason,
                 seasonDetail: $seasonDetail,
                 selectedEpisodeForSearch: $selectedEpisodeForSearch,
-                tmdbService: tmdbService
+                tmdbService: tmdbService,
+                onDownloadEpisode: { episode in
+                    downloadEpisode(episode)
+                },
+                onDownloadSeason: { season in
+                    downloadSeason(season)
+                }
             )
         }
     }
@@ -597,6 +630,192 @@ struct MediaDetailView: View {
             }
             .padding(.horizontal)
         }
+    }
+    
+    // MARK: - Download
+    
+    private func downloadMedia() {
+        guard let service = serviceManager.activeServices.first else {
+            downloadMessage = "No active services. Please activate a service first."
+            return
+        }
+        
+        isDownloading = true
+        
+        let jsController = JSController()
+        jsController.loadScript(service.jsScript)
+        
+        if searchResult.isMovie {
+            jsController.fetchJsSearchResults(keyword: searchResult.displayTitle, module: service) { [self] items in
+                guard let firstItem = items.first else {
+                    DispatchQueue.main.async { self.isDownloading = false }
+                    return
+                }
+                jsController.fetchStreamUrlJS(episodeUrl: firstItem.href, softsub: service.metadata.softsub ?? false, module: service) { result in
+                    DispatchQueue.main.async {
+                        self.startDownloadFromStreamResult(result, service: service, metadata: DownloadProgress(
+                            id: UUID(),
+                            tmdbId: self.searchResult.id,
+                            title: self.searchResult.displayTitle,
+                            mediaType: .movie,
+                            posterPath: self.movieDetail?.posterPath
+                        ))
+                    }
+                }
+            }
+        } else {
+            // TV show - download first episode
+            guard let episode = selectedEpisodeForSearch ?? seasonDetail?.episodes.first else {
+                DispatchQueue.main.async { self.isDownloading = false }
+                return
+            }
+            downloadEpisode(episode)
+        }
+    }
+    
+    private func downloadEpisode(_ episode: TMDBEpisode) {
+        guard let service = serviceManager.activeServices.first else { return }
+        
+        isDownloading = true
+        
+        let jsController = JSController()
+        jsController.loadScript(service.jsScript)
+        
+        jsController.fetchJsSearchResults(keyword: searchResult.displayTitle, module: service) { [self] items in
+            guard let firstItem = items.first else {
+                DispatchQueue.main.async { self.isDownloading = false }
+                return
+            }
+            
+            jsController.fetchDetailsJS(url: firstItem.href) { _, episodes in
+                let targetHref: String
+                if episodes.isEmpty {
+                    targetHref = firstItem.href
+                } else {
+                    let match = episodes.first { $0.number == episode.episodeNumber } ?? episodes.first
+                    targetHref = match?.href ?? firstItem.href
+                }
+                
+                jsController.fetchStreamUrlJS(episodeUrl: targetHref, softsub: service.metadata.softsub ?? false, module: service) { result in
+                    DispatchQueue.main.async {
+                        self.startDownloadFromStreamResult(result, service: service, metadata: DownloadProgress(
+                            id: UUID(),
+                            tmdbId: self.searchResult.id,
+                            title: self.searchResult.displayTitle,
+                            mediaType: .tvShow,
+                            seasonNumber: episode.seasonNumber,
+                            episodeNumber: episode.episodeNumber,
+                            episodeName: episode.name,
+                            posterPath: self.tvShowDetail?.posterPath
+                        ))
+                    }
+                }
+            }
+        }
+    }
+    
+    private func downloadSeason(_ season: TMDBSeason) {
+        Task {
+            do {
+                let detail = try await tmdbService.getSeasonDetails(tvShowId: searchResult.id, seasonNumber: season.seasonNumber)
+                await MainActor.run {
+                    isDownloading = true
+                    downloadEpisodesSequentially(detail.episodes)
+                }
+            } catch {
+                await MainActor.run {
+                    downloadMessage = "Failed to load season details"
+                }
+            }
+        }
+    }
+    
+    private func downloadEpisodesSequentially(_ episodes: [TMDBEpisode]) {
+        guard let service = serviceManager.activeServices.first, !episodes.isEmpty else {
+            isDownloading = false
+            return
+        }
+        
+        let jsController = JSController()
+        jsController.loadScript(service.jsScript)
+        
+        var remaining = episodes
+        
+        func downloadNext() {
+            guard let episode = remaining.first else {
+                DispatchQueue.main.async { self.isDownloading = false }
+                return
+            }
+            remaining.removeFirst()
+            
+            // Skip if already downloaded
+            if downloadManager.isDownloaded(tmdbId: searchResult.id, seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber) {
+                downloadNext()
+                return
+            }
+            
+            jsController.fetchJsSearchResults(keyword: searchResult.displayTitle, module: service) { [self] items in
+                guard let firstItem = items.first else {
+                    downloadNext()
+                    return
+                }
+                
+                jsController.fetchDetailsJS(url: firstItem.href) { _, episodes in
+                    let targetHref: String
+                    if episodes.isEmpty {
+                        targetHref = firstItem.href
+                    } else {
+                        let match = episodes.first { $0.number == episode.episodeNumber } ?? episodes.first
+                        targetHref = match?.href ?? firstItem.href
+                    }
+                    
+                    jsController.fetchStreamUrlJS(episodeUrl: targetHref, softsub: service.metadata.softsub ?? false, module: service) { result in
+                        DispatchQueue.main.async {
+                            self.startDownloadFromStreamResult(result, service: service, metadata: DownloadProgress(
+                                id: UUID(),
+                                tmdbId: self.searchResult.id,
+                                title: self.searchResult.displayTitle,
+                                mediaType: .tvShow,
+                                seasonNumber: episode.seasonNumber,
+                                episodeNumber: episode.episodeNumber,
+                                episodeName: episode.name,
+                                posterPath: self.tvShowDetail?.posterPath
+                            ))
+                        }
+                        // Small delay between downloads
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            downloadNext()
+                        }
+                    }
+                }
+            }
+        }
+        
+        downloadNext()
+    }
+    
+    private func startDownloadFromStreamResult(_ result: (streams: [String]?, subtitles: [String]?, sources: [[String: Any]]?), service: Service, metadata: DownloadProgress) {
+        var streamURL: URL?
+        
+        if let source = result.sources?.first,
+           let urlStr = (source["streamUrl"] as? String) ?? (source["url"] as? String),
+           let url = URL(string: urlStr) {
+            streamURL = url
+        } else if let firstStream = result.streams?.first(where: { $0.hasPrefix("http") }),
+                  let url = URL(string: firstStream) {
+            streamURL = url
+        } else if let firstStream = result.streams?.first,
+                  let url = URL(string: firstStream) {
+            streamURL = url
+        }
+        
+        guard let streamURL = streamURL else {
+            isDownloading = false
+            return
+        }
+        
+        let _ = downloadManager.startDownload(streamURL: streamURL, metadata: metadata)
+        isDownloading = false
     }
     
     private func toggleBookmark() {
