@@ -28,7 +28,6 @@ struct DownloadsView: View {
         }
         .navigationViewStyle(.stack)
     }
-    }
     
     // MARK: - Empty View
     
